@@ -1,88 +1,162 @@
 # streamlit_app.py
 from __future__ import annotations
-import io
-import json
-import numpy as np
+import base64
 import streamlit as st
+import numpy as np
 
 from parameters import default_params, drivers_from_params
-from plotting import plot_panel
-from model import simulate, compute_outputs_along_solution
+from plotting_fast import plot_panel  # row labels handled inside plotting code
 
-st.set_page_config(page_title="Coral Heat Stress — Annual Drivers", layout="wide")
+st.set_page_config(page_title="Coral DEB model", layout="wide")
 
-st.title("Coral Heat Stress Model")
-st.caption("Annual cycles for L, T, DIN (Nu), and Prey (X); Fig.5-style outputs below.")
+st.title("Coral DEB model")
+st.caption("Dynamic Energy Budget model for coral symbiosis")
 
-# --- Load & tweak params from UI ---
-params = default_params().copy()
+# ---------------------------
+# Helpers
+# ---------------------------
+def reset_params() -> dict:
+    return default_params().copy()
+
+@st.cache_data(show_spinner=False)
+def build_drivers_cached(params: dict):
+    return drivers_from_params(params)
+
+def slider_auto(label, value, lo=None, hi=None, step=None):
+    """
+    Streamlit slider with optional auto-range.
+    Pass lo/hi to override; otherwise a sensible range is inferred.
+    """
+    v = float(value)
+
+    # Infer range if not provided
+    if lo is None or hi is None:
+        if v == 0:
+            lo, hi = 0.0, 1.0
+        else:
+            span = abs(v) if abs(v) > 1e-12 else 1.0
+            lo = 0.0 if v >= 0 else -2.0 * span
+            hi = 2.5 * span
+            # Special-case tiny positives
+            if 0 <= v < 1e-9:
+                lo, hi = 0.0, max(5e-9, 5 * v if v > 0 else 1e-9)
+
+    # Infer step if not provided
+    if step is None:
+        step = (hi - lo) / 100.0 if hi > lo else 1.0
+
+    return st.slider(
+        label,
+        min_value=float(lo),
+        max_value=float(hi),
+        value=float(v),
+        step=float(step),
+    )
+
+# ---------------------------
+# Params & Sidebar UI
+# ---------------------------
+if "params" not in st.session_state:
+    st.session_state["params"] = reset_params()
+
+params = st.session_state["params"]
 
 with st.sidebar:
-    st.header("Simulation")
-    params["tmax"] = st.slider("Simulation length (days)", 30, 1460, int(params.get("tmax", 365.0)), step=5)
-    params["steps_per_day"] = st.slider("Steps p. day", 10, 200, int(params.get("steps_per_day", 40)), step=5)
+    # --- Environment first ---
+    st.header("Environment")
+
+    st.subheader("Temperature T")
+    params["T_mean"]  = slider_auto("T mean (°C)", params.get("T_mean", 28.0), lo=26, hi=35, step=0.1)
+    params["T_amp"]   = slider_auto("T amplitude (± °C)", params.get("T_amp", 2.0), lo=0, hi=10, step=0.1)
+    params["T_phase"] = st.slider(
+        "T peak day (0–365)",
+        min_value=0.0, max_value=365.0,
+        value=float(params.get("T_phase", 200.0))
+    )
+
+    st.subheader("Light L")
+    params["L_mean"]  = slider_auto("L mean (mol photons m⁻² d⁻¹)", params.get("L_mean", 30.0), lo=0, hi=80, step=1.0)
+    params["L_amp"]   = slider_auto("L amplitude (± around mean)",  params.get("L_amp", 25.0), lo=0, hi=40, step=1.0)
+    params["L_phase"] = st.slider(
+        "L peak day (0–365)",
+        min_value=0.0, max_value=365.0,
+        value=float(params.get("L_phase", 172.0))
+    )
+
+    st.subheader("Other environment factors")
+    # DIN abundance (mean only)
+    params["Nu_mean"] = slider_auto(
+        "DIN abundance (mol N L⁻¹)",
+        params.get("Nu_mean", 2e-7),
+        lo=0.0, hi=8e-7, step=1e-8
+    )
+    params["Nu_amp"] = 0.0
+    params["Nu_phase"] = 0.0
+
+    # Prey abundance (mean only)
+    params["X_mean"] = slider_auto(
+        "Prey abundance (mol C L⁻¹)",
+        params.get("X_mean", 2e-7),
+        lo=0.0, hi=8e-7, step=1e-8
+    )
+    params["X_amp"] = 0.0
+    params["X_phase"] = 0.0
 
     st.divider()
-    st.header("Initial Conditions (y0)")
-    s0 = st.number_input("S0 (symbiont)", value=float(params["y0"][0]), format="%.6g")
-    h0 = st.number_input("H0 (host)", value=float(params["y0"][1]), format="%.6g")
-    jcp0 = st.number_input("jCP0", value=float(params["y0"][2]), format="%.6g")
-    jsg0 = st.number_input("jSG0", value=float(params["y0"][3]), format="%.6g")
+
+    # --- Initial Conditions (only S and H shown) ---
+    st.header("Initial Conditions")
+    s0 = slider_auto("S(0) (symbiont)", params["y0"][0])
+    h0 = slider_auto("H(0) (host)",     params["y0"][1])
+    # Hidden (kept at current/default values)
+    jcp0 = params["y0"][2]
+    jsg0 = params["y0"][3]
     params["y0"] = [s0, h0, jcp0, jsg0]
 
     st.divider()
-    st.header("Annual Cycles (365 d period)")
 
-    st.subheader("Light L")
-    params["L_mean"]  = st.number_input("L mean (mol photons m⁻² d⁻¹)", value=float(params.get("L_mean", 30.0)))
-    params["L_amp"]   = st.number_input("L amplitude (± around mean)", value=float(params.get("L_amp", 25.0)))
-    params["L_phase"] = st.number_input("L peak day (0–365)", value=float(params.get("L_phase", 172.0)))
+    # --- tmax last (default 365, max 730) ---
+    params["tmax"] = st.slider(
+        "Simulation length (days)",
+        min_value=14, max_value=730,
+        value=int(params.get("tmax", 365)),
+        step=5
+    )
 
-    st.subheader("Temperature T")
-    params["T_mean"]  = st.number_input("T mean (°C)", value=float(params.get("T_mean", 28.0)))
-    params["T_amp"]   = st.number_input("T amplitude (± °C)", value=float(params.get("T_amp", 2.0)))
-    params["T_phase"] = st.number_input("T peak day (0–365)", value=float(params.get("T_phase", 200.0)))
+    # Reset button
+    if st.button("Reset"):
+        st.session_state["params"] = reset_params()
+        st.experimental_rerun()
 
-    st.subheader("DIN Nu")
-    params["Nu_mean"]  = st.number_input("Nu mean (mol N L⁻¹)", value=float(params.get("Nu_mean", 2e-7)), format="%.6g")
-    params["Nu_amp"]   = st.number_input("Nu amplitude (±)", value=float(params.get("Nu_amp", 1e-7)), format="%.6g")
-    params["Nu_phase"] = st.number_input("Nu peak day (0–365)", value=float(params.get("Nu_phase", 30.0)))
+# ---------------------------
+# Drivers, Simulation, Plot
+# ---------------------------
+drivers = build_drivers_cached(params)
 
-    st.subheader("Prey X")
-    params["X_mean"]  = st.number_input("X mean (mol C L⁻¹)", value=float(params.get("X_mean", 2e-7)), format="%.6g")
-    params["X_amp"]   = st.number_input("X amplitude (±)", value=float(params.get("X_amp", 5e-8)), format="%.6g")
-    params["X_phase"] = st.number_input("X peak day (0–365)", value=float(params.get("X_phase", 60.0)), format="%.6g")
+tabs = st.tabs(["📈 Plots", "ℹ️ About"])
 
-    st.divider()
-    st.caption("Tip: to stress temperature more, try raising T_mean or T_amp; "
-               "ensure your model recomputes α and β from T(t) each step.")
+with tabs[0]:
+    with st.spinner("Running simulation and rendering figure..."):
+        try:
+            fig, axes = plot_panel(params, drivers=drivers, show=False)
+            st.pyplot(fig, clear_figure=True)
+        except Exception as e:
+            st.error(f"Plotting failed: {e}")
 
-# Build drivers from current params
-drivers = drivers_from_params(params)
+with tabs[1]:
 
-# --- Run simulation & make figure ---
-fig, axes = plot_panel(params, drivers=drivers, show=False)
-st.pyplot(fig, clear_figure=True)
+    # Show the static diagram as an image (cleaner than embedding a PDF viewer)
+    st.image("coral-heat-diagram-Fv-Fm-Arr.svg", use_container_width=True)
 
-# --- Optional: downloadable CSV of key series ---
-with st.expander("Download time series as CSV"):
-    sol = simulate(params=params, drivers=drivers)
-    series = compute_outputs_along_solution(sol, params, drivers)
+    st.markdown(
+        """
+**Model details**
 
-    # sample environment at the solver times:
-    t = series["t"]
-    L = np.array([drivers.L(ti) if callable(drivers.L) else drivers.L for ti in t])
-    T = np.array([drivers.T(ti) if callable(drivers.T) else drivers.T for ti in t])
-    Nu = np.array([drivers.Nu(ti) if callable(drivers.Nu) else drivers.Nu for ti in t])
-    X  = np.array([drivers.X(ti)  if callable(drivers.X)  else drivers.X  for ti in t])
+Heat stress and bleaching in corals: a bioenergetic model.
 
-    # choose columns to export
-    export_keys = ["jCP", "rho_C", "rho_N", "jeL", "jNPQ", "cROS_increase",
-                   "expulsion", "jSG", "jHG", "net_S", "net_H", "S_over_H"]
-    header = "t,L,T,Nu,X," + ",".join(export_keys)
-    rows = np.column_stack([t, L, T, Nu, X] + [series[k] for k in export_keys])
+Pfab, Ferdinand, A. Raine Detmer, Holly V. Moeller, Roger M. Nisbet, Hollie M. Putnam, and Ross Cunning.
 
-    # to CSV
-    buf = io.StringIO()
-    np.savetxt(buf, rows, delimiter=",", header=header, comments="")
-    st.download_button("Download CSV", buf.getvalue(), file_name="coral_timeseries.csv", mime="text/csv")
+Coral Reefs (2024).  
+<https://link.springer.com/article/10.1007/s00338-024-02561-1>
+        """
+    )

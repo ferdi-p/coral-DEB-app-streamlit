@@ -41,10 +41,10 @@ class AnnualCycle:
 
 @dataclass
 class Drivers:
-    L: Callable[[float], float] | float = 0.0
+    L: Callable[[float], float] | float = 30
     T: Callable[[float], float] | float = 28.0
-    X: Callable[[float], float] | float = 1.0
-    Nu: Callable[[float], float] | float = 1.0
+    X: Callable[[float], float] | float = 2e-6
+    Nu: Callable[[float], float] | float = 2e-6
 
     def at(self, t: float) -> Dict[str, float]:
         def val(x): return x(t) if callable(x) else float(x)

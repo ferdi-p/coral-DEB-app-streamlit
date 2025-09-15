@@ -28,12 +28,12 @@ def default_params() -> Dict[str, float]:
         nNS=0.13,
         nNX=0.2,
         astar=1.34,
-        kCO2=10.0,
+        kCO2=5.0,
         kNPQ=112.0,
-        sigmaCH=0.02,
-        sigmaCS=0.02,
-        sigmaNH=0.02,
-        sigmaNS=0.02,
+        sigmaCH=0.1,
+        sigmaCS=0.9,
+        sigmaNH=0.9,
+        sigmaNS=0.9,
         OneOverkROS=1.0/80.0,
         b=5.0,
         Q10=1.88,
@@ -41,21 +41,21 @@ def default_params() -> Dict[str, float]:
         sigmax=1.0,
         steepness=0.58,
         ED50=29.7,
-        lam=0.5,
+        lam=1,
         # alpha=1.0,
         # beta=1.0,
 
         # environment cycle parameters
         L_mean=30.0, L_amp=0.0, L_phase=172.0,  # peak at midsummer (~day 172 = June 21)
-        T_mean=28.0, T_amp=8.0, T_phase=200.0,  # peak later in the summer
+        T_mean=27.0, T_amp=7.0, T_phase=182.0,  # peak later in the summer
         Nu_mean=2e-7, Nu_amp=0, Nu_phase=30.0,  # DIN
         X_mean=2e-7, X_amp=0, X_phase=60.0,  # Prey
         # --- simulation settings ---
-        tmax=30.0,          # days
+        tmax=365.0,          # days
 
 
-        steps_per_day=5,   # resolution
-        y0=[0.02,1, 2.8*0.8, 0.25*0.8],  # [S, H, jCP, jSG] initial values
+        steps_per_day=10,   # resolution
+        y0=[0.1,1, 2.8*0.2, 0.25*0.1],  # [S, H, jCP, jSG] initial values
 
     )
 
