@@ -124,10 +124,10 @@ with st.sidebar:
         step=5
     )
 
-    # Reset button
-    if st.button("Reset"):
-        st.session_state["params"] = reset_params()
-        st.experimental_rerun()
+    # # Reset button
+    # if st.button("Reset"):
+    #     st.session_state["params"] = reset_params()
+    #     st.experimental_rerun()
 
 # ---------------------------
 # Drivers, Simulation, Plot
