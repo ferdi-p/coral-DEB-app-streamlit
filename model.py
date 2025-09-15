@@ -147,7 +147,7 @@ def simulate(
         y0 = params.get("y0", [1.0, 0.1, 0.2, 0.2])
     y0 = np.array(y0, dtype=float)
 
-    tmax = float(params.get("tmax", 30.0))
+    tmax = float(params.get("tmax", 365.0))
     if t_eval is None:
         steps_per_day = int(params.get("steps_per_day", 40))
         t_eval = np.linspace(0.0, tmax, int(tmax * steps_per_day) + 1)

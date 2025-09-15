@@ -38,8 +38,8 @@ def slider_auto(label, value, lo=None, hi=None, step=None):
             lo = 0.0 if v >= 0 else -2.0 * span
             hi = 2.5 * span
             # Special-case tiny positives
-            if 0 <= v < 1e-9:
-                lo, hi = 0.0, max(5e-9, 5 * v if v > 0 else 1e-9)
+            if 0 <= v < 1e-12:
+                lo, hi = 0.0, max(5e-12, 5 * v if v > 0 else 1e-12)
 
     # Infer step if not provided
     if step is None:
@@ -51,6 +51,7 @@ def slider_auto(label, value, lo=None, hi=None, step=None):
         max_value=float(hi),
         value=float(v),
         step=float(step),
+        format="%f",
     )
 
 # ---------------------------
@@ -88,7 +89,7 @@ with st.sidebar:
     params["Nu_mean"] = slider_auto(
         "DIN abundance (mol N L⁻¹)",
         params.get("Nu_mean", 2e-7),
-        lo=0.0, hi=8e-7, step=1e-8
+        lo=0.0, hi=8e-7
     )
     params["Nu_amp"] = 0.0
     params["Nu_phase"] = 0.0
@@ -97,7 +98,7 @@ with st.sidebar:
     params["X_mean"] = slider_auto(
         "Prey abundance (mol C L⁻¹)",
         params.get("X_mean", 2e-7),
-        lo=0.0, hi=8e-7, step=1e-8
+        lo=0.0, hi=8e-7
     )
     params["X_amp"] = 0.0
     params["X_phase"] = 0.0

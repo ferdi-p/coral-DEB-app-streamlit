@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.transforms import Bbox
 
-from model_fast import simulate, compute_outputs_along_solution
+from model import simulate, compute_outputs_along_solution
 from helper_functions import Drivers
 
 # --- meta (names + units) ---
@@ -131,7 +131,7 @@ def plot_panel(
     gs = fig.add_gridspec(
         nrows=nrows_total, ncols=ncols,
         left=0.06, right=0.985, bottom=0.07, top=0.92,
-        hspace=0.6, wspace=0.28,
+        hspace=0.6, wspace=0.4,
         height_ratios=height_ratios
     )
 
