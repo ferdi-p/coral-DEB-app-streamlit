@@ -20,7 +20,7 @@ params = default_params().copy()
 with st.sidebar:
     st.header("Simulation")
     params["tmax"] = st.slider("Simulation length (days)", 30, 1460, int(params.get("tmax", 365.0)), step=5)
-    params["steps_per_day"] = st.slider("Steps per day", 10, 200, int(params.get("steps_per_day", 40)), step=5)
+    params["steps_per_day"] = st.slider("Steps p. day", 10, 200, int(params.get("steps_per_day", 40)), step=5)
 
     st.divider()
     st.header("Initial Conditions (y0)")
